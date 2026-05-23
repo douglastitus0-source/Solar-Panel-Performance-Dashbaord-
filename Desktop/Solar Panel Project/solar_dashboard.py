@@ -7,25 +7,22 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_squared_error
 import os
 
-
-# =============================================================
-# STEP 1 — DATA LOADING & FEATURE ENGINEERING  ✅
-# =============================================================
-@st.cache_data
-def load_data():
-    import os
+# BASE_DIR points to the folder this script lives in (works on cloud too)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# =============================================================
+# STEP 1 — DATA LOADING & FEATURE ENGINEERING
+# =============================================================
 @st.cache_data
 def load_data():
     file_path = os.path.join(BASE_DIR, "Solar_Panel_Performance_Dataset_840_Rows.xlsx")
     df = pd.read_excel(file_path)
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.dropna(subset=["Energy_Output(kWh)", "Solar_Irradiance(w/m2)"])
-    df["Month"]      = df["Date"].dt.month
-    df["DayOfWeek"]  = df["Date"].dt.dayofweek
-    df["Day"]        = df["Date"].dt.day
-    df["Timestamp"]  = df["Date"] + pd.to_timedelta(df["Hour"], unit="h")
+    df["Month"]     = df["Date"].dt.month
+    df["DayOfWeek"] = df["Date"].dt.dayofweek
+    df["Day"]       = df["Date"].dt.day
+    df["Timestamp"] = df["Date"] + pd.to_timedelta(df["Hour"], unit="h")
     df["Performance_Ratio"] = (
         df["Energy_Output(kWh)"]
         / df["Solar_Irradiance(w/m2)"].replace(0, np.nan)
@@ -38,16 +35,20 @@ def load_data():
     df["Hour_Period"] = df["Hour"].apply(hour_bin)
     return df
 
-df = load_data()
-
 # =============================================================
-# STEP 2 — PAGE CONFIG, CSS & SIDEBAR  ✅
+# STEP 2 — PAGE CONFIG  (must be the very first Streamlit call)
 # =============================================================
 st.set_page_config(
     page_title="Solar Panel Performance Dashboard",
     page_icon="☀️", layout="wide"
 )
 
+# Load data AFTER set_page_config
+df = load_data()
+
+# =============================================================
+# CSS STYLING
+# =============================================================
 st.markdown("""
 <style>
     .kpi-box {
@@ -58,8 +59,6 @@ st.markdown("""
     .kpi-label { color: #8fa8c8; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
     .kpi-value { color: #ffffff; font-size: 26px; font-weight: 700; }
     .kpi-sub   { color: #f5a623; font-size: 12px; margin-top: 4px; }
-
-    /* Action Layer card styles */
     .action-alert {
         background: #2d1515; border-radius: 10px;
         padding: 14px 18px; border-left: 4px solid #ef4444;
@@ -77,11 +76,13 @@ st.markdown("""
     }
     .action-title { color: #ffffff; font-size: 14px; font-weight: 700; }
     .action-body  { color: #aac0d0; font-size: 12px; margin-top: 4px; }
-
     section[data-testid="stSidebar"] { background-color: #0f1c2b; }
 </style>
 """, unsafe_allow_html=True)
 
+# =============================================================
+# SIDEBAR FILTERS
+# =============================================================
 st.sidebar.image("https://img.icons8.com/fluency/96/sun.png", width=56)
 st.sidebar.title("Solar Panel Filters")
 st.sidebar.markdown("---")
@@ -100,8 +101,6 @@ PERIOD_ORDER = ["Night (0-5)", "Morning (6-11)", "Afternoon (12-17)", "Evening (
 periods = st.sidebar.multiselect("Hour Period", options=PERIOD_ORDER, default=PERIOD_ORDER)
 
 st.sidebar.markdown("---")
-
-# Action Layer threshold control in sidebar
 st.sidebar.subheader("⚙️ Action Layer Settings")
 alert_threshold = st.sidebar.slider(
     "Alert threshold (% below predicted)",
@@ -130,7 +129,7 @@ if filtered.empty:
     st.stop()
 
 # =============================================================
-# STEP 3 — KPI METRIC CARDS  ✅
+# STEP 3 — KPI METRIC CARDS
 # =============================================================
 total_energy   = filtered["Energy_Output(kWh)"].sum()
 avg_irradiance = filtered["Solar_Irradiance(w/m2)"].mean()
@@ -158,7 +157,7 @@ for col, (label, value, subtitle) in zip(st.columns(5), kpi_data):
 st.markdown("---")
 
 # =============================================================
-# STEP 4 — TIME SERIES & PANEL BAR CHARTS  ✅
+# STEP 4 — TIME SERIES & PANEL BAR CHARTS
 # =============================================================
 c1, c2 = st.columns([2, 1])
 
@@ -194,7 +193,7 @@ with c2:
 st.markdown("---")
 
 # =============================================================
-# STEP 5 — IRRADIANCE BY HOUR PERIOD & HEATMAP  ✅
+# STEP 5 — IRRADIANCE BY HOUR PERIOD & HEATMAP
 # =============================================================
 c3, c4 = st.columns([1, 2])
 
@@ -237,7 +236,7 @@ with c4:
 st.markdown("---")
 
 # =============================================================
-# STEP 6 — SCATTER PLOTS  ✅
+# STEP 6 — SCATTER PLOTS
 # =============================================================
 sample = filtered.sample(min(600, len(filtered)), random_state=42)
 c5, c6 = st.columns(2)
@@ -282,7 +281,7 @@ with c6:
 st.markdown("---")
 
 # =============================================================
-# STEP 7 — REGRESSION MODEL & LIVE PREDICTOR  ✅
+# STEP 7 — REGRESSION MODEL & LIVE PREDICTOR
 # =============================================================
 st.subheader("📐 Regression Model — Predicting Energy Output")
 st.caption("Multiple linear regression using Solar Irradiance and Hour of Day as predictors")
@@ -357,47 +356,20 @@ with r2_col:
 
 st.markdown("---")
 
-
 # =============================================================
-# STEP 8 — ACTION LAYER  ✅  (NEW)
-#
-# This is the 5th layer of the DIKWA framework.
-# Wisdom told us WHAT to do. The Action layer DOES IT — or at
-# least automates the decision signal so a human can act fast.
-#
-# HOW IT WORKS:
-#   1. Train the regression model on ALL data (not just filtered)
-#      so predictions reflect full baseline performance.
-#   2. For each panel, sum its ACTUAL total energy vs its
-#      PREDICTED total energy.
-#   3. Calculate the gap as a percentage:
-#        Gap% = (Actual - Predicted) / Predicted × 100
-#   4. If Gap% < -alert_threshold → RED alert (underperforming)
-#      If Gap% < 0 but > -threshold → YELLOW warning (monitor)
-#      If Gap% >= 0 → GREEN (performing as expected or better)
-#   5. Auto-generate a plain-English action message for each.
-#
-# The threshold is user-controlled via the sidebar slider,
-# making this a truly interactive smart system response layer.
+# STEP 8 — ACTION LAYER
 # =============================================================
-
 st.subheader("🚨 Action Layer — Automated Panel Alerts & Recommendations")
 st.caption(
     "DIKWA Layer 5 — the system evaluates every panel against its regression-predicted "
     "baseline and generates automatic action signals. Threshold is adjustable in the sidebar."
 )
 
-# ── Step 8A : Train model on FULL dataset for fair baseline ──
-# We use df (all 820 rows) not filtered, so predicted values
-# represent what the panel SHOULD produce given its irradiance
-# and hour — regardless of what month or period is selected.
 full_X = df[["Solar_Irradiance(w/m2)", "Hour"]]
 full_y = df["Energy_Output(kWh)"]
 action_model = LinearRegression().fit(full_X, full_y)
 df["Predicted_kWh"] = action_model.predict(full_X).clip(min=0)
 
-# ── Step 8B : Aggregate per panel ────────────────────────────
-# Only evaluate panels that are currently selected in sidebar
 panel_action = (
     df[df["Panel_ID"].isin(panels)]
     .groupby("Panel_ID")
@@ -409,64 +381,42 @@ panel_action = (
     .reset_index()
 )
 
-# Calculate the performance gap
 panel_action["Gap_kWh"] = panel_action["Actual_kWh"] - panel_action["Predicted_kWh"]
 panel_action["Gap_Pct"] = (
     panel_action["Gap_kWh"] / panel_action["Predicted_kWh"] * 100
 ).round(2)
 
-# Sort numerically: P1, P2 ... P10
 panel_action["_sort"] = panel_action["Panel_ID"].str[1:].astype(int)
 panel_action = panel_action.sort_values("_sort").drop("_sort", axis=1)
 
-
-# ── Step 8C : Assign status and action message to each panel ─
 def classify_panel(gap_pct, threshold):
     if gap_pct < -threshold:
-        return "🔴 ALERT",   "red",    f"Producing {abs(gap_pct):.1f}% BELOW predicted. Schedule immediate inspection."
+        return "🔴 ALERT",    "red",    f"Producing {abs(gap_pct):.1f}% BELOW predicted. Schedule immediate inspection."
     elif gap_pct < 0:
-        return "🟡 MONITOR", "yellow", f"Producing {abs(gap_pct):.1f}% below predicted. Watch for further decline."
+        return "🟡 MONITOR",  "yellow", f"Producing {abs(gap_pct):.1f}% below predicted. Watch for further decline."
     elif gap_pct < 5:
-        return "🟢 NORMAL",  "green",  f"Performing within expected range (+{gap_pct:.1f}%)."
+        return "🟢 NORMAL",   "green",  f"Performing within expected range (+{gap_pct:.1f}%)."
     else:
-        return "⭐ EXCELLENT","green",  f"Outperforming prediction by {gap_pct:.1f}%. Benchmark against other panels."
+        return "⭐ EXCELLENT", "green",  f"Outperforming prediction by {gap_pct:.1f}%. Benchmark against other panels."
 
 panel_action["Status"], panel_action["Color"], panel_action["Action"] = zip(
-    *panel_action["Gap_Pct"].apply(
-        lambda g: classify_panel(g, alert_threshold)
-    )
+    *panel_action["Gap_Pct"].apply(lambda g: classify_panel(g, alert_threshold))
 )
 
-
-# ── Step 8D : Summary counters ───────────────────────────────
-n_alert   = (panel_action["Color"] == "red").sum()
-n_warn    = (panel_action["Color"] == "yellow").sum()
-n_ok      = (panel_action["Color"] == "green").sum()
+n_alert = (panel_action["Color"] == "red").sum()
+n_warn  = (panel_action["Color"] == "yellow").sum()
+n_ok    = (panel_action["Color"] == "green").sum()
 
 a1, a2, a3, a4 = st.columns(4)
-a1.metric("🔴 Panels Alerting",  n_alert,
-          delta=f">{alert_threshold}% below predicted",
-          delta_color="inverse")
-a2.metric("🟡 Panels to Monitor", n_warn,
-          delta="0% to threshold below",
-          delta_color="off")
-a3.metric("🟢 Normal / Excellent", n_ok,
-          delta="At or above predicted",
-          delta_color="normal")
-a4.metric("Alert Threshold Set", f"{alert_threshold}%",
-          delta="Adjustable in sidebar",
-          delta_color="off")
+a1.metric("🔴 Panels Alerting",   n_alert, delta=f">{alert_threshold}% below predicted", delta_color="inverse")
+a2.metric("🟡 Panels to Monitor", n_warn,  delta="0% to threshold below",                delta_color="off")
+a3.metric("🟢 Normal / Excellent",n_ok,    delta="At or above predicted",                delta_color="normal")
+a4.metric("Alert Threshold Set",  f"{alert_threshold}%", delta="Adjustable in sidebar",  delta_color="off")
 
 st.markdown("&nbsp;")
-
-
-# ── Step 8E : Panel-by-panel action cards ────────────────────
 st.markdown("**Per-Panel Action Signals**")
 cols_per_row = 5
-rows = [
-    panel_action.iloc[i:i+cols_per_row]
-    for i in range(0, len(panel_action), cols_per_row)
-]
+rows = [panel_action.iloc[i:i+cols_per_row] for i in range(0, len(panel_action), cols_per_row)]
 
 for row_df in rows:
     cols = st.columns(len(row_df))
@@ -486,8 +436,6 @@ for row_df in rows:
         </div>
         """, unsafe_allow_html=True)
 
-
-# ── Step 8F : Action summary table ───────────────────────────
 st.markdown("&nbsp;")
 st.markdown("**Full Action Summary Table**")
 
@@ -501,9 +449,9 @@ display_df.columns = [
 ]
 
 def colour_gap(val):
-    if val < -alert_threshold:  return "color: #ef4444; font-weight: bold"
-    elif val < 0:               return "color: #f59e0b; font-weight: bold"
-    else:                       return "color: #22c55e; font-weight: bold"
+    if val < -alert_threshold: return "color: #ef4444; font-weight: bold"
+    elif val < 0:              return "color: #f59e0b; font-weight: bold"
+    else:                      return "color: #22c55e; font-weight: bold"
 
 st.dataframe(
     display_df.style
@@ -513,13 +461,11 @@ st.dataframe(
         "Gap (kWh)":       "{:+.2f}",
         "Gap (%)":         "{:+.1f}%",
     })
-    .applymap(colour_gap, subset=["Gap (%)"]),
+    .map(colour_gap, subset=["Gap (%)"]),
     use_container_width=True,
     hide_index=True
 )
 
-
-# ── Step 8G : Automated recommendation messages ───────────────
 st.markdown("&nbsp;")
 st.markdown("**🤖 Automated System Recommendations**")
 
@@ -547,7 +493,6 @@ if len(alerts) == 0 and len(warns) == 0:
         "No immediate action required. Continue routine monitoring schedule."
     )
 
-# Best panel recommendation
 best_action = panel_action.loc[panel_action["Gap_Pct"].idxmax()]
 st.info(
     f"⭐ **Best Practice Reference** — Panel **{best_action['Panel_ID']}** "
@@ -555,13 +500,11 @@ st.info(
     f"Use its installation conditions as the benchmark for all future panel deployments."
 )
 
-
 # =============================================================
 # FOOTER
 # =============================================================
 st.markdown("---")
 st.caption(
-    "© 2026  Douglas Kilyobas Titus "
-    "MSc Data Analytics "
+    "© 2026 Douglas Kilyobas Titus  ·  MSc Data Analytics  ·  "
     "Framework: DIKWA (Data · Information · Knowledge · Wisdom · Action)"
 )
