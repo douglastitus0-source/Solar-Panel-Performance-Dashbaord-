@@ -1,0 +1,64 @@
+import pandas as pd
+import numpy as np
+import os
+os.chdir(r"C:\Users\Douglas Titus\Desktop\Solar Panel Project")
+
+def load_data():
+    df = pd.read_excel(r"C:\Users\Douglas Titus\Desktop\Solar Panel Project\Solar_Panel_Performance_Dataset_840_Rows.xlsx")
+
+    df["Date"] = pd.to_datetime(df["Date"])
+
+    df = df.dropna(subset=["Energy_Output(kWh)", "Solar_Irradiance(w/m2)"])
+
+    df["Month"] = df["Date"].dt.month
+    df["DayOfWeek"] = df["Date"].dt.dayofweek
+    df["Day"] = df["Date"].dt.day
+    df["Timestamp"] = df["Date"] + pd.to_timedelta(df["Hour"], unit="h")
+
+    df["Performance_Ratio"] = (
+        df["Energy_Output(kWh)"]
+        / df["Solar_Irradiance(w/m2)"].replace(0, np.nan)
+    ).fillna(0)
+
+    def hour_bin(h):
+        if h < 6:
+            return "Night (0-5)"
+        elif h < 12:
+            return "Morning (6-11)"
+        elif h < 18:
+            return "Afternoon (12-17)"
+        else:
+            return "Evening (18-23)"
+
+    df["Hour_Period"] = df["Hour"].apply(hour_bin)
+
+    return df
+
+
+if __name__ == "__main__":
+    df = load_data()
+
+    print("=" * 55)
+    print("  SOLAR PANEL DATASET - STEP 1 VERIFICATION")
+    print("=" * 55)
+
+    print(f"\nRows after cleaning : {len(df)}")
+    print(f"Columns now         : {len(df.columns)}")
+
+    print("\n-- DATE RANGE --")
+    print(f"   From : {df['Date'].min().date()}")
+    print(f"   To   : {df['Date'].max().date()}")
+
+    print("\n-- PANELS IN DATASET --")
+    print(f"   {sorted(df['Panel_ID'].unique())}")
+
+    print("\n-- ENERGY OUTPUT(kWh) SUMMARY --")
+    print(df["Energy_Output(kWh)"].describe().round(4).to_string())
+
+    print("\n-- SOLAR IRRADIANCE(w/m2) SUMMARY --")
+    print(df["Solar_Irradiance(w/m2)"].describe().round(4).to_string())
+
+    print("\n-- FIRST 5 ROWS --")
+    print(df.head(5).to_string(index=False))
+
+    print("\nStep 1 complete. Data is clean and ready.\n")
