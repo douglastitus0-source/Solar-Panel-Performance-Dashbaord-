@@ -7,7 +7,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_squared_error
 import os
 
-os.chdir(r"C:\Users\Douglas Titus\Desktop\Solar Panel Project")
 
 # =============================================================
 # STEP 1 — DATA LOADING & FEATURE ENGINEERING  ✅
