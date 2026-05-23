@@ -13,7 +13,13 @@ import os
 # =============================================================
 @st.cache_data
 def load_data():
-    df = pd.read_excel("Solar_Panel_Performance_Dataset_840_Rows.xlsx")
+    import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+@st.cache_data
+def load_data():
+    file_path = os.path.join(BASE_DIR, "Solar_Panel_Performance_Dataset_840_Rows.xlsx")
+    df = pd.read_excel(file_path)
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.dropna(subset=["Energy_Output(kWh)", "Solar_Irradiance(w/m2)"])
     df["Month"]      = df["Date"].dt.month
